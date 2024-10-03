@@ -87,6 +87,7 @@ size_t print_constant_disas(Chunk* chunk, size_t offset) {
 	size_t const_idx = chunk->code.items[offset + 1];
 	printf("%zu:\tOp: %-16s %4zu\n", offset, "Constant", const_idx);
 	printf("%lf\n", chunk->values.items[const_idx]);
+	return offset + 2;
 }
 
 void print_chunk_disas(Chunk *c) {
