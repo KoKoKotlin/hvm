@@ -49,28 +49,39 @@ typedef double Value;
 
 dl_define(ValueDl, Value);
 dl_define(CodeDl, uint8_t);
+dl_define(LineNumDl, size_t);
 
 typedef struct {
 	char* name;
 	ValueDl values;
 	CodeDl code;
+	LineNumDl lines;
 } Chunk;
 
 Chunk create_chunk(char* name) {
 	Chunk c;
 	ValueDl vdl;
 	CodeDl code;
+	LineNumDl lines;
 	dl_create(32, sizeof(Value), vdl);
 	dl_create(32, sizeof(uint8_t), code);
+	dl_create(32, sizeof(size_t), lines);
 	c.name = name;
 	c.values = vdl;
 	c.code = code;
+	c.lines = lines;
        	return c;
+}
+
+void write_chunk(Chunk* c, uint8_t byte, size_t line) {
+	dl_append(c->code, byte);
+	dl_append(c->lines, line);
 }
 
 void free_chunk(Chunk* c) {
 	dl_delete(c->values);
 	dl_delete(c->code);
+	dl_delete(c->lines);
 }
 
 size_t add_constant(Chunk* c, Value v) {
@@ -79,14 +90,13 @@ size_t add_constant(Chunk* c, Value v) {
 }
 
 size_t print_simple_inst_disas(const char* opcode_name, Chunk* chunk, size_t offset) {
-	printf("%zu:\tOp: %-16s\n", offset, opcode_name);
+	printf("%-16s\n", opcode_name);
 	return offset + 1;
 }
 
 size_t print_constant_disas(Chunk* chunk, size_t offset) {
 	size_t const_idx = chunk->code.items[offset + 1];
-	printf("%zu:\tOp: %-16s %4zu\n", offset, "Constant", const_idx);
-	printf("%lf\n", chunk->values.items[const_idx]);
+	printf("%-16s %4zu %lf\n", "Constant", const_idx, chunk->values.items[const_idx]);
 	return offset + 2;
 }
 
@@ -96,6 +106,7 @@ void print_chunk_disas(Chunk *c) {
 	CodeDl* code = &c->code;
      	while (offset < code->count) {
 		uint8_t opcode = code->items[offset];
+		printf("%04zu: %04zu Op: ", offset, c->lines.items[offset]);
 		switch (opcode) {
 		case OP_RETURN:
 			offset = print_simple_inst_disas("Return", c, offset);
@@ -112,10 +123,11 @@ void print_chunk_disas(Chunk *c) {
 
 int main() {
 	Chunk c = create_chunk("test chunk");
-	dl_append(c.code, OP_RETURN);
-	size_t v_idx1 =  add_constant(&c, 10.0);
-	dl_append(c.code, OP_CONSTANT);
-	dl_append(c.code, v_idx1);
+	write_chunk(&c, OP_RETURN, 1);
+	size_t v_idx1 = add_constant(&c, 10.0);
+	write_chunk(&c, OP_CONSTANT, 2);
+	write_chunk(&c, v_idx1, 2);
+		
 	print_chunk_disas(&c);
 	free_chunk(&c);
 	return 0;
