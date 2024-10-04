@@ -41,6 +41,12 @@ typedef enum {
 	OP_ENUM_LEN,
 } OpCode;
 
+typedef enum {
+	INTERPRET_OK,
+	INTERPRET_COMPILE_ERROR,
+	INTERPRET_RUNTIME_ERROR,
+} HVMResult;
+
 static char** opcode_names = (char*[]){
 	"Return",
 	"Constant",
@@ -48,6 +54,10 @@ static char** opcode_names = (char*[]){
 };
 
 typedef double Value; 
+
+void printValue(Value* v) {
+	printf("%lf", *v);
+}
 
 dl_define(ValueDl, Value);
 dl_define(CodeDl, uint8_t);
@@ -59,6 +69,49 @@ typedef struct {
 	CodeDl code;
 	LineNumDl lines;
 } Chunk;
+
+typedef struct {
+	Chunk* chunk;
+	uint8_t* ip;
+} HVM;
+
+// global vm object that keeps track of te state of execution of the bytecode provided
+static HVM hvm;
+
+void create_hvm() {
+
+}
+
+void free_hvm() {
+	
+}
+
+HVMResult run_hvm() {
+#define READ_BYTE() (*hvm.ip++)
+#define READ_CONSTANT() (hvm.chunk->values.items[READ_BYTE()])
+	for (;;) {
+		uint8_t instruction = READ_BYTE();
+		printf("Current Instruction: %u\n", instruction);
+		switch (instruction) {
+		case OP_RETURN:
+			return INTERPRET_OK;
+		case OP_CONSTANT:
+			Value constant = READ_CONSTANT();
+			printValue(&constant);
+			printf("\n");
+			break;
+		}
+	}
+	
+#undef READ_BYTE
+#undef READ_CONSTANT
+}
+
+HVMResult interpret(Chunk* chunk) {
+	hvm.chunk = chunk;
+	hvm.ip = chunk->code.items;
+	return run_hvm();
+}
 
 uint32_t read32(uint8_t* bytes) {
 	uint32_t result = 0;
@@ -121,13 +174,17 @@ size_t print_simple_inst_disas(const char* opcode_name, Chunk* chunk, size_t off
 
 size_t print_constant_disas(Chunk* chunk, size_t offset) {
 	size_t const_idx = chunk->code.items[offset + 1];
-	printf("%-16s %4zu %lf\n", opcode_names[OP_CONSTANT], const_idx, chunk->values.items[const_idx]);
+	printf("%-16s %4zu ", opcode_names[OP_CONSTANT], const_idx);
+	printValue(&chunk->values.items[const_idx]);
+	printf("\n");
 	return offset + 2;
 }
 
 size_t print_constant_long_disas(Chunk* chunk, size_t offset) {
 	size_t const_idx = read32(&chunk->code.items[offset+1]);
-	printf("%-16s %4zu %lf\n", opcode_names[OP_CONSTANT_LONG], const_idx, chunk->values.items[const_idx]);
+	printf("%-16s %4zu", opcode_names[OP_CONSTANT_LONG], const_idx);
+	printValue(&chunk->values.items[const_idx]);
+	printf("\n");
 	return offset + 5;
 }
 
@@ -157,11 +214,12 @@ void print_chunk_disas(Chunk *c) {
 
 int main() {
 	Chunk c = create_chunk("test chunk");
-	write_chunk(&c, OP_RETURN, 1);
 	for (size_t i = 0; i < 1000; i++) {
 		write_constant(&c, i, i+1);
 	}
-	print_chunk_disas(&c);
+	write_chunk(&c, OP_RETURN, 1);
+	// print_chunk_disas(&c);
+	interpret(&c);
 	free_chunk(&c);
 	return 0;
 }
