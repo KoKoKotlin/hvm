@@ -37,12 +37,14 @@
 typedef enum {
 	OP_RETURN = 0,
 	OP_CONSTANT,
+	OP_CONSTANT_LONG,
 	OP_ENUM_LEN,
 } OpCode;
 
-static char** opcode_name = (char*[]){
-	"OP_RETURN",
-	"OP_VALUE",
+static char** opcode_names = (char*[]){
+	"Return",
+	"Constant",
+	"ConstantLong",
 };
 
 typedef double Value; 
@@ -57,6 +59,13 @@ typedef struct {
 	CodeDl code;
 	LineNumDl lines;
 } Chunk;
+
+uint32_t read32(uint8_t* bytes) {
+	uint32_t result = 0;
+	for (size_t i = 0; i < 4; i++)
+		result |= bytes[i] << i*8;
+	return result;
+}
 
 Chunk create_chunk(char* name) {
 	Chunk c;
@@ -73,20 +82,36 @@ Chunk create_chunk(char* name) {
        	return c;
 }
 
+size_t add_constant(Chunk* c, Value v) {
+	dl_append(c->values, v);
+	return c->values.count - 1;
+}
+
 void write_chunk(Chunk* c, uint8_t byte, size_t line) {
 	dl_append(c->code, byte);
 	dl_append(c->lines, line);
+}
+
+void write_chunk_32(Chunk* c, uint32_t v, size_t line) {
+	for (size_t i = 0; i < 4; i++)
+		write_chunk(c, (v >> i*8) & 0xF, line);	
+}
+
+void write_constant(Chunk* c, Value value, int line) {
+	size_t const_idx = add_constant(c, value);
+	if (const_idx < 256) {
+		write_chunk(c, OP_CONSTANT, line);
+		write_chunk(c, const_idx, line);
+	} else {
+		write_chunk(c, OP_CONSTANT_LONG, line);
+		write_chunk_32(c, (uint32_t)const_idx, line);
+	}
 }
 
 void free_chunk(Chunk* c) {
 	dl_delete(c->values);
 	dl_delete(c->code);
 	dl_delete(c->lines);
-}
-
-size_t add_constant(Chunk* c, Value v) {
-	dl_append(c->values, v);
-	return c->values.count - 1;
 }
 
 size_t print_simple_inst_disas(const char* opcode_name, Chunk* chunk, size_t offset) {
@@ -96,8 +121,14 @@ size_t print_simple_inst_disas(const char* opcode_name, Chunk* chunk, size_t off
 
 size_t print_constant_disas(Chunk* chunk, size_t offset) {
 	size_t const_idx = chunk->code.items[offset + 1];
-	printf("%-16s %4zu %lf\n", "Constant", const_idx, chunk->values.items[const_idx]);
+	printf("%-16s %4zu %lf\n", opcode_names[OP_CONSTANT], const_idx, chunk->values.items[const_idx]);
 	return offset + 2;
+}
+
+size_t print_constant_long_disas(Chunk* chunk, size_t offset) {
+	size_t const_idx = read32(&chunk->code.items[offset+1]);
+	printf("%-16s %4zu %lf\n", opcode_names[OP_CONSTANT_LONG], const_idx, chunk->values.items[const_idx]);
+	return offset + 5;
 }
 
 void print_chunk_disas(Chunk *c) {
@@ -109,10 +140,13 @@ void print_chunk_disas(Chunk *c) {
 		printf("%04zu: %04zu Op: ", offset, c->lines.items[offset]);
 		switch (opcode) {
 		case OP_RETURN:
-			offset = print_simple_inst_disas("Return", c, offset);
+			offset = print_simple_inst_disas(opcode_names[OP_RETURN], c, offset);
 			break;
 		case OP_CONSTANT:
 			offset = print_constant_disas(c, offset);
+			break;
+		case OP_CONSTANT_LONG:
+			offset = print_constant_long_disas(c, offset);
 			break;
 		default:
 			printf("Unknown instruction with opcode %u at offset %zu!", opcode, offset);
@@ -124,10 +158,9 @@ void print_chunk_disas(Chunk *c) {
 int main() {
 	Chunk c = create_chunk("test chunk");
 	write_chunk(&c, OP_RETURN, 1);
-	size_t v_idx1 = add_constant(&c, 10.0);
-	write_chunk(&c, OP_CONSTANT, 2);
-	write_chunk(&c, v_idx1, 2);
-		
+	for (size_t i = 0; i < 1000; i++) {
+		write_constant(&c, i, i+1);
+	}
 	print_chunk_disas(&c);
 	free_chunk(&c);
 	return 0;
