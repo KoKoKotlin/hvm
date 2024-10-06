@@ -40,6 +40,6 @@ typedef struct {
 static Scanner scanner;
 
 void init_scanner(const char* source);
-Token scan_token();
+magit-sToken scan_token();
 
 #endif // __SCANNER_H_
