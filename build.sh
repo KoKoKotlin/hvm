@@ -2,4 +2,4 @@
 
 set -xe
 
-gcc -g -ggdb -O0 -o hvm value.c utils.c chunk.c hvm.c main.c 
+gcc -DDEBUG -g -ggdb -O0 -o hvm value.c scanner.c utils.c chunk.c hvm.c compiler.c main.c 
